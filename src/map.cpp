@@ -2,6 +2,8 @@
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <constants.hpp>
+#include <iostream>
+#include <iterator>
 #include <rando.hpp>
 #include <cstring>
 #include <map.hpp>
@@ -47,6 +49,8 @@ sf::Vector2i get_direction_vector(const Direction direction) {
 }
 
 void Map::update() {
+  std::vector<Creature> new_creatures;
+  new_creatures.reserve(this->creatures.size());
   // this is really bad
   for (Creature &creature : this->creatures) {
     for (const Tile &tile : creature.tiles) {
@@ -123,6 +127,9 @@ void Map::update() {
       bool spawn_blocked = false;
       uint32_t spawn_attempts = 0;
       do {
+        sf::Vector2i offset = sf::Vector2i((int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE), (int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE));
+        new_creature.position = creature.position + offset;
+
         for (Tile tile : new_creature.tiles) {
           sf::Vector2i tile_pos = new_creature.position + tile.rel_pos;
           if (this->tiles[tile_pos.y][tile_pos.x] != TileType::NONE) {
@@ -132,7 +139,21 @@ void Map::update() {
         }
         spawn_attempts++;
       } while (spawn_blocked && spawn_attempts < MAX_SPAWN_ATTEMPTS);
+
+      if (spawn_blocked) continue;
+
+      new_creatures.push_back(new_creature);
+      for (Tile tile : new_creature.tiles) {
+        sf::Vector2i pos = new_creature.position + tile.rel_pos;
+
+        this->tiles[pos.y][pos.x] = tile.type;
+      }
+      std::cout << "cloned creature (" << creature.position.x << ", " << creature.position.y << ")" << std::endl;
+      std::cout << "new creature pos: (" << new_creature.position.x << ", " << new_creature.position.y << ")" << std::endl;
     }
   }
+
+  this->creatures.reserve(this->creatures.size() + new_creatures.size());
+  this->creatures.insert(this->creatures.end(), std::make_move_iterator(new_creatures.begin()), std::make_move_iterator(new_creatures.end()));
   std::this_thread::sleep_for(std::chrono::seconds(1));
 }

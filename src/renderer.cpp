@@ -4,7 +4,6 @@
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/VideoMode.hpp>
 #include <constants.hpp>
-#include <iostream>
 #include <renderer.hpp>
 // sf::RenderWindow window(sf::VideoMode({800, 600}), "SFML Window");
 // window.setVerticalSyncEnabled(true);
@@ -29,11 +28,11 @@ void generateTextureFromMap(const Map &map) {
       const uint32_t type = static_cast<uint32_t>(tiles[y][x]);
       textureBuffer[y][x] = colorMap[type];
 
-      if (type != 0) {
-        std::cout << static_cast<uint32_t>(colorMap[type].r) << ", "
-                  << static_cast<uint32_t>(colorMap[type].g) << ", "
-                  << static_cast<uint32_t>(colorMap[type].b) << std::endl;
-      }
+      // if (type != 0) {
+      //   std::cout << static_cast<uint32_t>(colorMap[type].r) << ", "
+      //             << static_cast<uint32_t>(colorMap[type].g) << ", "
+      //             << static_cast<uint32_t>(colorMap[type].b) << std::endl;
+      // }
     }
   }
 }

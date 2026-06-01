@@ -1,10 +1,11 @@
 #include <SFML/System/Vector2.hpp>
 #include <creature.hpp>
+#include <iostream>
 #include <rando.hpp>
 #include <cstring>
 #include <unordered_set>
 
-Creature::Creature(Tile tiles[], uint32_t num_tiles,
+Creature::Creature(const Tile tiles[], const uint32_t num_tiles,
                    const sf::Vector2i starting_position)
     : can_move(false), num_tiles(num_tiles),
       reproduction_cost(num_tiles * REPRODUCTION_FOOD_FACTOR), health(1),
@@ -74,6 +75,7 @@ Creature Creature::reproduce() {
     buffer[new_num_tiles++] = new_tile;
   } else if (mutation < REMOVE_TILE_MUTATION_CHANCE && num_tiles > 1) {
     const uint32_t num = (uint32_t)(rando() * num_tiles);
+    std::cout << "removed tile\n";
     // to delete, overwrite with the last element
     buffer[num] = buffer[--new_num_tiles];
   } else if (mutation < CHANGE_TILE_MUTATION_CHANCE) {
