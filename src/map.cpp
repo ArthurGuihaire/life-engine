@@ -7,6 +7,7 @@
 #include <rando.hpp>
 #include <cstring>
 #include <map.hpp>
+#include <sys/types.h>
 #include <thread>
 
 Map::Map(const Creature &starting_creature) : tiles{TileType::NONE} {
@@ -53,7 +54,8 @@ void Map::update() {
   new_creatures.reserve(this->creatures.size());
   // this is really bad
   for (Creature &creature : this->creatures) {
-    for (const Tile &tile : creature.tiles) {
+    for (uint32_t idx = 0; idx < creature.num_tiles; ++idx) {
+      const Tile &tile = creature.tiles[idx];
       const sf::Vector2i base_pos = creature.position + tile.rel_pos;
       // very safe, a C-style array of pointers
       TileType *adjacent_tiles[4] = {&tiles[base_pos.y][base_pos.x + 1],
@@ -82,7 +84,8 @@ void Map::update() {
     if (creature.can_move) {
       bool blocked = false;
       const sf::Vector2i rel_vec = get_direction_vector(creature.movement);
-      for (const Tile &tile : creature.tiles) {
+      for (uint32_t idx = 0; idx < creature.num_tiles; ++idx) {
+        const Tile &tile = creature.tiles[idx];
         const sf::Vector2i abs_vec = rel_vec + creature.position + tile.rel_pos;
         if (this->tiles[abs_vec.y + abs_vec.y][abs_vec.x + abs_vec.x] !=
             TileType::NONE) {
@@ -130,7 +133,8 @@ void Map::update() {
         sf::Vector2i offset = sf::Vector2i((int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE), (int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE));
         new_creature.position = creature.position + offset;
 
-        for (Tile tile : new_creature.tiles) {
+        for (uint32_t idx = 0; idx < new_creature.num_tiles; ++idx) {
+          const Tile &tile = new_creature.tiles[idx];
           sf::Vector2i tile_pos = new_creature.position + tile.rel_pos;
           if (this->tiles[tile_pos.y][tile_pos.x] != TileType::NONE) {
             spawn_blocked = true;
@@ -143,7 +147,8 @@ void Map::update() {
       if (spawn_blocked) continue;
 
       new_creatures.push_back(new_creature);
-      for (Tile tile : new_creature.tiles) {
+      for (uint32_t idx = 0; idx < new_creature.num_tiles; ++idx) {
+        const Tile &tile = new_creature.tiles[idx];
         sf::Vector2i pos = new_creature.position + tile.rel_pos;
 
         this->tiles[pos.y][pos.x] = tile.type;
