@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(life_engine LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
 
 # find needed sfml libraries
 find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)

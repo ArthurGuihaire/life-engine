@@ -1,142 +1,83 @@
-#include "tile.hpp"
+#include <constants.hpp>
+#include <utils.hpp>
+#include <map.hpp>
+#include <tile.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
-#include <constants.hpp>
 #include <iostream>
-#include <iterator>
-#include <rando.hpp>
-#include <cstring>
-#include <map.hpp>
 #include <sys/types.h>
-#include <thread>
+#include <chrono>
+#include <unordered_set>
 
-Map::Map(const Creature &starting_creature) : tiles{TileType::NONE} {
+
+bool Map::collision(const sf::Vector2i& pos) {
+  return pos.x < 0 || pos.x >= MAP_WIDTH || pos.y < 0 || pos.y >= MAP_HEIGHT || this->tiles[pos.y][pos.x] != TileType::NONE;
+}
+
+Map::Map(const Creature &starting_creature) : tiles{TileType::NONE}, next_update_time(std::chrono::steady_clock::now() + UPDATE_INTERVAL) {
   creatures.push_back(starting_creature);
+  writeToMap(starting_creature);
+}
 
-  for (uint32_t i = 0; i < starting_creature.num_tiles; i++) {
-    const Tile &tile = starting_creature.tiles[i];
-    const sf::Vector2i pos = starting_creature.position + tile.rel_pos;
-    tiles[pos.y][pos.x] = tile.type;
+uint8_t Map::getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]) {
+  uint8_t mask = 0xFF;
+
+  for (uint32_t i = 0; i < sizeof(adjacent_offsets) / sizeof(adjacent_offsets[0]); i++) {
+    const sf::Vector2i adj_pos = pos + adjacent_offsets[i];
+    if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
+      mask &= ~(1 << i);
+    } else {
+      adjacent_tiles[i] = &tiles[adj_pos.y][adj_pos.x];
+    }
+  }
+
+  return mask;
+}
+
+void Map::erase(const Creature& creature, const TileType type) {
+  for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
+    const Tile& tile = creature.tiles[idx];
+    const sf::Vector2i base_pos = creature.position + tile.rel_pos;
+    tiles[base_pos.y][base_pos.x] = type;
   }
 }
 
-sf::Vector2i rotate_vector(const sf::Vector2i input,
-                           const uint32_t num_rotations) {
-  switch (num_rotations) {
-  case 0:
-    return input;
-  case 1:
-    return {-input.y, input.x};
-  case 2:
-    return -input;
-  default:
-    return {input.y, -input.x};
+void Map::writeToMap(const Creature& creature) {
+  for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
+    const Tile& tile = creature.tiles[idx];
+    const sf::Vector2i base_pos = creature.position + tile.rel_pos;
+    tiles[base_pos.y][base_pos.x] = tile.type;
   }
 }
 
-sf::Vector2i get_direction_vector(const Direction direction) {
-  switch (direction) {
-  case Direction::RIGHT:
-    return {1, 0};
-  case Direction::UP:
-    return {0, 1};
-  case Direction::LEFT:
-    return {-1, 0};
-  case Direction::DOWN:
-    return {0, -1};
-  default:
-    return {0, 0};
-  }
+void Map::kill(const uint32_t idx) {
+  this->erase(this->creatures[idx], TileType::FOOD);
+  this->creatures[idx] = this->creatures.back();
+  this->creatures.pop_back();
 }
+
+static std::vector<Creature> new_creatures;
 
 void Map::update() {
-  std::vector<Creature> new_creatures;
-  new_creatures.reserve(this->creatures.size());
-  // this is really bad
-  for (Creature &creature : this->creatures) {
-    for (uint32_t idx = 0; idx < creature.num_tiles; ++idx) {
-      const Tile &tile = creature.tiles[idx];
-      const sf::Vector2i base_pos = creature.position + tile.rel_pos;
-      // very safe, a C-style array of pointers
-      TileType *adjacent_tiles[4] = {&tiles[base_pos.y][base_pos.x + 1],
-                                     &tiles[base_pos.y][base_pos.x - 1],
-                                     &tiles[base_pos.y + 1][base_pos.x],
-                                     &tiles[base_pos.y - 1][base_pos.x]};
-      // I know I know, im checking can_move for every tile, too lazy to split
-      // into 2 for loops
-      if (!creature.can_move && tile.type == TileType::GREEN) {
-        for (TileType *adj : adjacent_tiles) {
-          if (*adj == TileType::NONE && rando() < GREEN_PRODUCTION_CHANCE) {
-            *adj = TileType::FOOD;
-          }
-        }
-      }
-      if (tile.type == TileType::MOUTH) {
-        for (TileType *adj : adjacent_tiles) {
-          if (*adj == TileType::FOOD) {
-            creature.food += 1;
-            *adj = TileType::NONE;
-          }
-        }
-      }
-    }
-    // handle movement
-    if (creature.can_move) {
-      bool blocked = false;
-      const sf::Vector2i rel_vec = get_direction_vector(creature.movement);
-      for (uint32_t idx = 0; idx < creature.num_tiles; ++idx) {
-        const Tile &tile = creature.tiles[idx];
-        const sf::Vector2i abs_vec = rel_vec + creature.position + tile.rel_pos;
-        if (this->tiles[abs_vec.y + abs_vec.y][abs_vec.x + abs_vec.x] !=
-            TileType::NONE) {
-          blocked = true;
-          break;
-        }
-      }
+  new_creatures.clear();
+  uint32_t creatures_alive = this->creatures.size();
+  for (uint32_t idx = 0; idx < creatures_alive; ++idx) {
+    this->creatures[idx].update(*this);
 
-      if (blocked || rando() < ROTATION_CHANCE) {
-        const Direction new_dir = (Direction)(rando() * 4);
-        const uint32_t diff =
-            (uint32_t)new_dir - (uint32_t)creature.movement + 4 % 4;
-        if (diff != 0) {
-          bool rotation_blocked = false;
-          Tile new_arr[MAX_TILES_PER_CREATURE];
-          for (uint32_t i = 0; i < creature.num_tiles; i++) {
-            Tile &tile = creature.tiles[i];
-            const sf::Vector2i new_vec = rotate_vector(tile.rel_pos, diff);
-            const sf::Vector2i abs_pos = creature.position + new_vec;
-            if (this->tiles[abs_pos.y][abs_pos.x] != TileType::NONE) {
-              rotation_blocked = true;
-              break;
-            } else
-              new_arr[i] = {tile.type, new_vec};
-          }
-
-          if (!rotation_blocked)
-            std::memcpy(creature.tiles, new_arr,
-                        creature.num_tiles * sizeof(Tile));
-        }
-      }
-
-      else {
-        creature.position += rel_vec;
-      }
-    }
-
-    //handle reproduction
-    if (creature.food > creature.reproduction_cost) {
-      Creature new_creature = creature.reproduce();
+    if (this->creatures[idx].food >= this->creatures[idx].reproduction_cost) {
+      Creature new_creature = this->creatures[idx].reproduce();
 
       bool spawn_blocked = false;
       uint32_t spawn_attempts = 0;
       do {
         sf::Vector2i offset = sf::Vector2i((int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE), (int32_t)(rando() * (MAX_REPRODUCTION_DISTANCE * 2 + 1) - MAX_REPRODUCTION_DISTANCE));
-        new_creature.position = creature.position + offset;
+        new_creature.position = this->creatures[idx].position + offset;
 
-        for (uint32_t idx = 0; idx < new_creature.num_tiles; ++idx) {
-          const Tile &tile = new_creature.tiles[idx];
-          sf::Vector2i tile_pos = new_creature.position + tile.rel_pos;
-          if (this->tiles[tile_pos.y][tile_pos.x] != TileType::NONE) {
+        spawn_blocked = false;
+        for (uint32_t tile_idx = 0; tile_idx < new_creature.num_tiles; ++tile_idx) {
+          const Tile &tile = new_creature.tiles[tile_idx];
+          const sf::Vector2i tile_pos = new_creature.position + tile.rel_pos;
+          if (tile_pos.x < 0 || tile_pos.x >= MAP_WIDTH || tile_pos.y < 0 || tile_pos.y >= MAP_HEIGHT || this->tiles[tile_pos.y][tile_pos.x] != TileType::NONE) {
             spawn_blocked = true;
             break;
           }
@@ -147,18 +88,51 @@ void Map::update() {
       if (spawn_blocked) continue;
 
       new_creatures.push_back(new_creature);
-      for (uint32_t idx = 0; idx < new_creature.num_tiles; ++idx) {
-        const Tile &tile = new_creature.tiles[idx];
-        sf::Vector2i pos = new_creature.position + tile.rel_pos;
+      writeToMap(new_creature);
+    }
 
-        this->tiles[pos.y][pos.x] = tile.type;
+    if (this->creatures[idx].age > MAX_AGE_FACTOR * this->creatures[idx].num_tiles) {
+      this->kill(idx);
+      creatures_alive--;
+      continue;
+    }
+
+    std::unordered_set<sf::Vector2i, Vec2Hash> empty_adj;
+    sf::Vector2i empty_adj_array[MAX_TILES_PER_CREATURE * 4];
+    uint32_t num_empty_adj = 0;
+    for (uint32_t i = 0; i < this->creatures[idx].num_tiles; i++) {
+      if (this->creatures[idx].tiles[i].type == TileType::ARMOR) continue;
+      sf::Vector2i adj_array[4] = {
+          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[0] + this->creatures[idx].position,
+          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[1] + this->creatures[idx].position,
+          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[2] + this->creatures[idx].position,
+          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[3] + this->creatures[idx].position,
+      };
+      for (sf::Vector2i adj : adj_array) {
+        if (!empty_adj.contains(adj)) {
+          empty_adj.insert(adj);
+          empty_adj_array[num_empty_adj++] = adj;
+        }
       }
-      std::cout << "cloned creature (" << creature.position.x << ", " << creature.position.y << ")" << std::endl;
-      std::cout << "new creature pos: (" << new_creature.position.x << ", " << new_creature.position.y << ")" << std::endl;
+    }
+    this->creatures[idx].age++;
+    for (uint32_t i = 0; i < num_empty_adj; i++) {
+      if (this->tiles[empty_adj_array[i].y][empty_adj_array[i].x] == TileType::KILL) {
+        this->creatures[idx].health -= 1;
+        if (this->creatures[idx].health <= 0) {
+          creatures_alive--;
+          this->kill(idx);
+          break;
+        }
+      }
     }
   }
 
-  this->creatures.reserve(this->creatures.size() + new_creatures.size());
   this->creatures.insert(this->creatures.end(), std::make_move_iterator(new_creatures.begin()), std::make_move_iterator(new_creatures.end()));
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  // std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  // this->next_update_time += UPDATE_INTERVAL;
+  // std::this_thread::sleep_until(this->next_update_time);
+  //
+
 }
