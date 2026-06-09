@@ -12,7 +12,7 @@ bool Map::collision(const sf::Vector2i& pos) {
   return pos.x < 0 || pos.x >= MAP_WIDTH || pos.y < 0 || pos.y >= MAP_HEIGHT || this->tiles[pos.y][pos.x] != TileType::NONE;
 }
 
-Map::Map(const Creature &starting_creature) : tiles{TileType::NONE}, next_update_time(std::chrono::steady_clock::now() + UPDATE_INTERVAL) {
+Map::Map(const Creature &starting_creature) : tiles{TileType::NONE} {
   creatures.push_back(starting_creature);
   writeToMap(starting_creature);
 }

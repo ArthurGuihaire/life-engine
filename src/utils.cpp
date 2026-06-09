@@ -11,6 +11,7 @@ namespace random_generator {
     // why is randomness in C++ so goddamn annoying
     std::random_device device;
     gen = std::mt19937(device());
+    random_dist = std::uniform_real_distribution<double>(0.0, 1.0);
   }
 }
 

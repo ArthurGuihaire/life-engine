@@ -24,5 +24,4 @@ public:
 
 private:
   std::vector<Creature> creatures;
-  std::chrono::time_point<std::chrono::steady_clock> next_update_time;
 };

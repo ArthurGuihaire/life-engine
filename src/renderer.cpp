@@ -24,7 +24,7 @@ Renderer::Renderer(const Map &map)
     : window(sf::VideoMode({SCREEN_WIDTH, SCREEN_HEIGHT}), "SFML Window"),
       mapTexture(sf::Vector2u{MAP_WIDTH, MAP_HEIGHT}), global_map(map),
       mapSprite(mapTexture) {
-  this->window.setVerticalSyncEnabled(false);
+  this->window.setVerticalSyncEnabled(true);
   mapSprite.setScale(sf::Vector2f({TILE_SIZE, TILE_SIZE}));
 }
 
