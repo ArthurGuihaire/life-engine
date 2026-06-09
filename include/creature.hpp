@@ -20,17 +20,19 @@ struct Creature {
            const sf::Vector2i starting_position);
 
   uint32_t num_tiles;
-  //uint32_t num_adjacent_tiles;
+  uint32_t num_adjacent_tiles;
   uint32_t health;
   uint32_t food;
   uint32_t reproduction_cost;
+  //creature position relative to top left of the map
   sf::Vector2i position;
   bool can_move; // not const cause of C++ initializer list shenanigans
   Direction movement;
   uint32_t age;
 
   Tile tiles[MAX_TILES_PER_CREATURE];
-  //sf::Vector2i adjacent_tiles[MAX_TILES_PER_CREATURE * 4];
+  //positions relative to creature position
+  sf::Vector2i adjacent_tiles[MAX_TILES_PER_CREATURE * 4];
 
   bool canRotate(uint32_t num_90_rotations) const;
   Creature reproduce();

@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 project(life_engine LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 
-# find needed sfml libraries
+# find needed sfml and boost libraries
 find_package(SFML 3 COMPONENTS Graphics Window System REQUIRED)
+find_package(Boost REQUIRED CONFIG COMPONENTS container)
 
 # enable compile command exporting for lsp support
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -28,9 +29,10 @@ file(GLOB SOURCES "src/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# dynamic link sfml
+# dynamic link sfml and boost libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SFML::Graphics
     SFML::Window
     SFML::System
+    Boost::container
 )

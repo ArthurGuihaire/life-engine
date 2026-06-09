@@ -11,12 +11,13 @@ class Map {
 public:
   Map(const Creature &starting_creature);
   void update();
-  uint8_t getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]);
+  // uint8_t getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]);
   void erase(const Creature& creature, const TileType type);
   void kill(const uint32_t idx);
   void writeToMap(const Creature& creature);
   bool collision(const sf::Vector2i& pos);
   uint32_t numCreatures() const { return creatures.size(); }
+  uint32_t cascadeEat(const sf::Vector2i& position);
 
   // public so renderer can make a pixel map
   TileType tiles[MAP_HEIGHT][MAP_WIDTH];

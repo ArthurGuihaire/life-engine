@@ -27,12 +27,16 @@ int main() {
   std::vector<ProfilePoint> profiling_data;
 
   while (renderer.window.isOpen()) {
-    auto start_time = std::chrono::steady_clock::now();
-    map.update();
-    auto end_time = std::chrono::steady_clock::now();
-    profiling_data.push_back({map.numCreatures(), std::chrono::duration<double>(end_time - start_time).count()});
+    if (RUN_PROFILING) {
+      auto start_time = std::chrono::steady_clock::now();
+      map.update();
+      auto end_time = std::chrono::steady_clock::now();
+      profiling_data.push_back({map.numCreatures(), std::chrono::duration<double>(end_time - start_time).count()});
+    }
+    else {
+      map.update();
+    }
     renderer.render();
-
     while (const std::optional event = renderer.window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         renderer.window.close();
@@ -45,7 +49,9 @@ int main() {
     }
   }
 
-  for (const auto& point : profiling_data) {
-    std::cout << "(" << point.num_creatures << ", " << point.update_time << ")\n";
+  if (RUN_PROFILING) {
+    for (const auto& point : profiling_data) {
+      std::cout << "(" << point.num_creatures << ", " << point.update_time << ")\n";
+    }
   }
 }

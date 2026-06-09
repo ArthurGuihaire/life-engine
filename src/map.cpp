@@ -4,11 +4,9 @@
 #include <tile.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
-#include <iostream>
 #include <sys/types.h>
 #include <chrono>
-#include <unordered_set>
-
+#include <boost/container/small_vector.hpp>
 
 bool Map::collision(const sf::Vector2i& pos) {
   return pos.x < 0 || pos.x >= MAP_WIDTH || pos.y < 0 || pos.y >= MAP_HEIGHT || this->tiles[pos.y][pos.x] != TileType::NONE;
@@ -19,20 +17,20 @@ Map::Map(const Creature &starting_creature) : tiles{TileType::NONE}, next_update
   writeToMap(starting_creature);
 }
 
-uint8_t Map::getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]) {
-  uint8_t mask = 0xFF;
+// uint8_t Map::getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]) {
+//   uint8_t mask = 0xFF;
 
-  for (uint32_t i = 0; i < sizeof(adjacent_offsets) / sizeof(adjacent_offsets[0]); i++) {
-    const sf::Vector2i adj_pos = pos + adjacent_offsets[i];
-    if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
-      mask &= ~(1 << i);
-    } else {
-      adjacent_tiles[i] = &tiles[adj_pos.y][adj_pos.x];
-    }
-  }
+//   for (uint32_t i = 0; i < sizeof(adjacent_offsets) / sizeof(adjacent_offsets[0]); i++) {
+//     const sf::Vector2i adj_pos = pos + adjacent_offsets[i];
+//     if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
+//       mask &= ~(1 << i);
+//     } else {
+//       adjacent_tiles[i] = &tiles[adj_pos.y][adj_pos.x];
+//     }
+//   }
 
-  return mask;
-}
+//   return mask;
+// }
 
 void Map::erase(const Creature& creature, const TileType type) {
   for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
@@ -97,27 +95,9 @@ void Map::update() {
       continue;
     }
 
-    std::unordered_set<sf::Vector2i, Vec2Hash> empty_adj;
-    sf::Vector2i empty_adj_array[MAX_TILES_PER_CREATURE * 4];
-    uint32_t num_empty_adj = 0;
-    for (uint32_t i = 0; i < this->creatures[idx].num_tiles; i++) {
-      if (this->creatures[idx].tiles[i].type == TileType::ARMOR) continue;
-      sf::Vector2i adj_array[4] = {
-          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[0] + this->creatures[idx].position,
-          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[1] + this->creatures[idx].position,
-          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[2] + this->creatures[idx].position,
-          this->creatures[idx].tiles[i].rel_pos + adjacent_offsets[3] + this->creatures[idx].position,
-      };
-      for (sf::Vector2i adj : adj_array) {
-        if (!empty_adj.contains(adj)) {
-          empty_adj.insert(adj);
-          empty_adj_array[num_empty_adj++] = adj;
-        }
-      }
-    }
     this->creatures[idx].age++;
-    for (uint32_t i = 0; i < num_empty_adj; i++) {
-      if (this->tiles[empty_adj_array[i].y][empty_adj_array[i].x] == TileType::KILL) {
+    for (uint32_t i = 0; i < this->creatures[idx].num_adjacent_tiles; i++) {
+      if (this->tiles[this->creatures[idx].adjacent_tiles[i].y + this->creatures[idx].position.y][this->creatures[idx].adjacent_tiles[i].x +  this->creatures[idx].position.x] == TileType::KILL) {
         this->creatures[idx].health -= 1;
         if (this->creatures[idx].health <= 0) {
           creatures_alive--;
@@ -134,5 +114,35 @@ void Map::update() {
   // this->next_update_time += UPDATE_INTERVAL;
   // std::this_thread::sleep_until(this->next_update_time);
   //
+}
 
+// yet another BFS
+uint32_t Map::cascadeEat(const sf::Vector2i& position) {
+  uint32_t num_eaten = 0;
+
+  boost::container::small_vector<sf::Vector2i, MAX_CASCADES> cascade_stack;
+
+  cascade_stack.push_back(position);
+  while (!cascade_stack.empty()) {
+    sf::Vector2i pos = cascade_stack.back();
+    cascade_stack.pop_back();
+
+    this->tiles[pos.y][pos.x] = TileType::NONE;
+    num_eaten++;
+
+    for (const sf::Vector2i& offset : adjacent_offsets) {
+      if (num_eaten + cascade_stack.size() >= MAX_CASCADES) {
+        return num_eaten;
+      }
+      const sf::Vector2i adj_pos = pos + offset;
+      if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
+        continue;
+      }
+      if (this->tiles[adj_pos.y][adj_pos.x] == TileType::FOOD) {
+        cascade_stack.push_back(adj_pos);
+      }
+    }
+  }
+
+  return num_eaten;
 }

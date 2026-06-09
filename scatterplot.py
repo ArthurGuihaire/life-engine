@@ -4,7 +4,7 @@ import re
 import matplotlib.pyplot as plt
 
 # 1. Add all the filenames you want to graph into this list
-file_list = ["dataset_alpha.txt", "dataset_beta.txt", "dataset_gamma.txt"]
+file_list = ["no_cache.csv", "cache_array.csv"]
 
 # Loop through each file in your list
 for file_path in file_list:
@@ -32,8 +32,8 @@ for file_path in file_list:
 
 # Add titles and axis labels
 plt.title("Multi-File Scatter Plot Comparison")
-plt.xlabel("X Axis")
-plt.ylabel("Y Axis")
+plt.xlabel("Num creatures")
+plt.ylabel("Update time (ms)")
 plt.grid(True)
 
 # Add the legend to display the filename labels and their corresponding colors
