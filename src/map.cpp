@@ -17,21 +17,6 @@ Map::Map(const Creature &starting_creature) : tiles{TileType::NONE} {
   writeToMap(starting_creature);
 }
 
-// uint8_t Map::getAdjacentTiles(const sf::Vector2i& pos, TileType* adjacent_tiles[4]) {
-//   uint8_t mask = 0xFF;
-
-//   for (uint32_t i = 0; i < sizeof(adjacent_offsets) / sizeof(adjacent_offsets[0]); i++) {
-//     const sf::Vector2i adj_pos = pos + adjacent_offsets[i];
-//     if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
-//       mask &= ~(1 << i);
-//     } else {
-//       adjacent_tiles[i] = &tiles[adj_pos.y][adj_pos.x];
-//     }
-//   }
-
-//   return mask;
-// }
-
 void Map::erase(const Creature& creature, const TileType type) {
   for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
     const Tile& tile = creature.tiles[idx];

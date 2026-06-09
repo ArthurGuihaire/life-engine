@@ -87,6 +87,7 @@ Creature Creature::reproduce() {
       const uint32_t num = (uint32_t)(rando() * this->num_adjacent_tiles);
       const Tile new_tile = Tile{type, this->adjacent_tiles[num]};
       buffer[new_num_tiles++] = new_tile;
+    }
   } else if (mutation < REMOVE_TILE_MUTATION_CHANCE && new_num_tiles > 1) {
     const uint32_t num = (uint32_t)(rando() * new_num_tiles);
     // to delete, overwrite with the last element
