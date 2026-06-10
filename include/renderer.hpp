@@ -18,10 +18,10 @@ constexpr inline sf::Color colorMap[] = {
 class Renderer {
 
     public:
-        Renderer(const Map& map);
+        Renderer(const Map& map, sf::RenderWindow& window);
         void render();
 
-        sf::RenderWindow window;
+        sf::RenderWindow& window;
     private:
         const Map& global_map;
         sf::Texture mapTexture;

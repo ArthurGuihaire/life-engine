@@ -1,4 +1,5 @@
 #pragma once
+#include <boost/container/small_vector.hpp>
 #include <tile.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <cstdint>
@@ -30,9 +31,11 @@ struct Creature {
   Direction movement;
   uint32_t age;
 
+  uint32_t num_food_bonuses;
+
   Tile tiles[MAX_TILES_PER_CREATURE];
   //positions relative to creature position
-  sf::Vector2i adjacent_tiles[MAX_TILES_PER_CREATURE * 4];
+  boost::container::small_vector<sf::Vector2i, MAX_TILES_PER_CREATURE> adjacent_tiles;
 
   bool canRotate(uint32_t num_90_rotations) const;
   Creature reproduce();

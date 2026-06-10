@@ -5,12 +5,14 @@
 #include <SFML/Window/VideoMode.hpp>
 #include <constants.hpp>
 #include <renderer.hpp>
+#include <mutex>
 
 // have pixels in static memory
 static sf::Color textureBuffer[MAP_HEIGHT][MAP_WIDTH];
 
 // bad design I know, writes to global texture buffer
 void generateTextureFromMap(const Map &map) {
+  std::lock_guard<std::mutex> lock(map.tiles_mutex);
   const auto tiles = map.tiles;
   for (uint32_t y = 0; y < MAP_HEIGHT; y++) {
     for (uint32_t x = 0; x < MAP_WIDTH; x++) {
@@ -20,8 +22,8 @@ void generateTextureFromMap(const Map &map) {
   }
 }
 
-Renderer::Renderer(const Map &map)
-    : window(sf::VideoMode({SCREEN_WIDTH, SCREEN_HEIGHT}), "SFML Window"),
+Renderer::Renderer(const Map &map, sf::RenderWindow &window)
+    : window(window),
       mapTexture(sf::Vector2u{MAP_WIDTH, MAP_HEIGHT}), global_map(map),
       mapSprite(mapTexture) {
   this->window.setVerticalSyncEnabled(true);

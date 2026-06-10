@@ -4,8 +4,6 @@
 #include <tile.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
-#include <sys/types.h>
-#include <chrono>
 #include <boost/container/small_vector.hpp>
 
 bool Map::collision(const sf::Vector2i& pos) {
@@ -14,10 +12,13 @@ bool Map::collision(const sf::Vector2i& pos) {
 
 Map::Map(const Creature &starting_creature) : tiles{TileType::NONE} {
   creatures.push_back(starting_creature);
-  writeToMap(starting_creature);
+  {
+    writeToMap(starting_creature);
+  }
 }
 
 void Map::erase(const Creature& creature, const TileType type) {
+  std::lock_guard<std::mutex> lock(tiles_mutex);
   for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
     const Tile& tile = creature.tiles[idx];
     const sf::Vector2i base_pos = creature.position + tile.rel_pos;
@@ -26,6 +27,7 @@ void Map::erase(const Creature& creature, const TileType type) {
 }
 
 void Map::writeToMap(const Creature& creature) {
+  std::lock_guard<std::mutex> lock(tiles_mutex);
   for (uint32_t idx = 0; idx < creature.num_tiles; idx++) {
     const Tile& tile = creature.tiles[idx];
     const sf::Vector2i base_pos = creature.position + tile.rel_pos;
@@ -34,12 +36,11 @@ void Map::writeToMap(const Creature& creature) {
 }
 
 void Map::kill(const uint32_t idx) {
+  //erase already locks tiles
   this->erase(this->creatures[idx], TileType::FOOD);
   this->creatures[idx] = this->creatures.back();
   this->creatures.pop_back();
 }
-
-static std::vector<Creature> new_creatures;
 
 void Map::update() {
   new_creatures.clear();
@@ -60,7 +61,7 @@ void Map::update() {
         for (uint32_t tile_idx = 0; tile_idx < new_creature.num_tiles; ++tile_idx) {
           const Tile &tile = new_creature.tiles[tile_idx];
           const sf::Vector2i tile_pos = new_creature.position + tile.rel_pos;
-          if (tile_pos.x < 0 || tile_pos.x >= MAP_WIDTH || tile_pos.y < 0 || tile_pos.y >= MAP_HEIGHT || this->tiles[tile_pos.y][tile_pos.x] != TileType::NONE) {
+          if (collision(tile_pos)) {
             spawn_blocked = true;
             break;
           }
@@ -77,6 +78,7 @@ void Map::update() {
     if (this->creatures[idx].age > MAX_AGE_FACTOR * this->creatures[idx].num_tiles) {
       this->kill(idx);
       creatures_alive--;
+      idx--;
       continue;
     }
 
@@ -85,8 +87,9 @@ void Map::update() {
       if (this->tiles[this->creatures[idx].adjacent_tiles[i].y + this->creatures[idx].position.y][this->creatures[idx].adjacent_tiles[i].x +  this->creatures[idx].position.x] == TileType::KILL) {
         this->creatures[idx].health -= 1;
         if (this->creatures[idx].health <= 0) {
-          creatures_alive--;
           this->kill(idx);
+          creatures_alive--;
+          idx--;
           break;
         }
       }
@@ -96,7 +99,7 @@ void Map::update() {
   this->creatures.insert(this->creatures.end(), std::make_move_iterator(new_creatures.begin()), std::make_move_iterator(new_creatures.end()));
   // std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  // this->next_update_time += UPDATE_INTERVAL;
+  // this->next_update_time += UPDATE_INTERVALUPDATE_INTERVAL;
   // std::this_thread::sleep_until(this->next_update_time);
   //
 }
@@ -108,6 +111,8 @@ uint32_t Map::cascadeEat(const sf::Vector2i& position) {
   boost::container::small_vector<sf::Vector2i, MAX_CASCADES> cascade_stack;
 
   cascade_stack.push_back(position);
+
+  std::lock_guard<std::mutex> lock(tiles_mutex);
   while (!cascade_stack.empty()) {
     sf::Vector2i pos = cascade_stack.back();
     cascade_stack.pop_back();
@@ -120,7 +125,7 @@ uint32_t Map::cascadeEat(const sf::Vector2i& position) {
         return num_eaten;
       }
       const sf::Vector2i adj_pos = pos + offset;
-      if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
+      if (!isOnMap(adj_pos)) {
         continue;
       }
       if (this->tiles[adj_pos.y][adj_pos.x] == TileType::FOOD) {

@@ -1,7 +1,6 @@
 #include <boost/container/container_fwd.hpp>
 #include <constants.hpp>
 #include <iostream>
-#include <iterator>
 #include <tile.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
@@ -10,19 +9,17 @@
 #include <cstdint>
 #include <utils.hpp>
 #include <cstring>
-#include <unordered_set>
 
 Creature::Creature(const Tile tiles[], const uint32_t num_tiles,
                    const sf::Vector2i starting_position)
     : can_move(false), num_tiles(num_tiles),
       reproduction_cost(num_tiles * REPRODUCTION_FOOD_FACTOR + REPRODUCTION_FOOD_BASE), health(1),
-      food(0), position(starting_position), age(0), num_adjacent_tiles(0) {
+      food(0), position(starting_position), age(0), num_adjacent_tiles(0), num_food_bonuses(0) {
   std::memcpy(this->tiles, tiles, num_tiles * sizeof(Tile));
 
   for (uint32_t i = 0; i < num_tiles; i++) {
-    if (tiles[i].type == TileType::MOVE) {
+    if (tiles[i].type == TileType::MOVE)
       this->can_move = true;
-    }
     else if (tiles[i].type == TileType::ARMOR)
       this->health += 1;
   }
@@ -126,6 +123,7 @@ void Creature::updateTiles(Map& map) {
         }
         TileType& adjacent_tile = map.tiles[adj_pos.y][adj_pos.x];
         if (adjacent_tile == TileType::NONE && rando() < GREEN_PRODUCTION_CHANCE) {
+          std::lock_guard<std::mutex> lock(map.tiles_mutex);
           adjacent_tile = TileType::FOOD;
         }
       }
@@ -142,8 +140,9 @@ void Creature::updateTiles(Map& map) {
             this->food += map.cascadeEat(adj_pos);
           }
           else {
-            adjacent_tile = TileType::NONE;
             this->food++;
+            std::lock_guard<std::mutex> lock(map.tiles_mutex);
+            adjacent_tile = TileType::NONE;
           }
         }
       }
@@ -212,9 +211,14 @@ void Creature::prepassKills(Map& map) {
     if (tile.type == TileType::KILL) {
       for (sf::Vector2i adj : adjacent_offsets) {
         const sf::Vector2i abs_vec = this->position + tile.rel_pos + adj;
-        if (map.collision(abs_vec)) {
+        if (!isOnMap(abs_vec)) continue;
+
+        const TileType tile_type = map.tiles[abs_vec.y][abs_vec.x];
+        if (static_cast<uint32_t>(tile_type) >= NUM_NONLIVING_TYPES && tile_type != TileType::ARMOR) {
           this->food += KILL_FOOD_BONUS;
-          break;
+          std::cout << "creature got food bonus x" << this->num_food_bonuses << std::endl;
+          this->num_food_bonuses++;
+          return;
         }
       }
     }
@@ -222,7 +226,7 @@ void Creature::prepassKills(Map& map) {
 }
 
 void Creature::update(Map& map) {
-  this->prepassKills(map);
   this->updateTiles(map);
   this->updateMovement(map);
+  this->prepassKills(map);
 }
