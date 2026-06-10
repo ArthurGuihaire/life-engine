@@ -41,3 +41,5 @@ constexpr inline uint32_t NUM_NONLIVING_TYPES = 2;
 constexpr inline bool RUN_PROFILING = false;
 
 constexpr inline uint32_t KILL_CREATURES_BUFFER = 1024; //1024 ints * 4 bytes = 4KB, 1 page
+constexpr inline uint32_t ADJACENT_TILES_BUFFER = MAX_TILES_PER_CREATURE;
+constexpr inline uint32_t ADJACENT_COLOR_BUFFER = 16;

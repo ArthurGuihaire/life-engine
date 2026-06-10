@@ -11,7 +11,7 @@ constexpr inline sf::Color colorMap[] = {
     sf::Color::Green,
     sf::Color::Yellow,
     sf::Color::Red,
-    sf::Color::Blue,
+    sf::Color({128, 128, 255, 255}),
     sf::Color({255, 0, 255, 255}),
 };
 

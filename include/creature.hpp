@@ -36,11 +36,16 @@ struct Creature {
   Tile tiles[MAX_TILES_PER_CREATURE];
   //positions relative to creature position
   boost::container::small_vector<sf::Vector2i, MAX_TILES_PER_CREATURE> adjacent_tiles;
+  boost::container::small_vector<sf::Vector2i, ADJACENT_COLOR_BUFFER> adjacent_red_tiles;
+  boost::container::small_vector<sf::Vector2i, ADJACENT_COLOR_BUFFER> adjacent_yellow_tiles;
+  boost::container::small_vector<sf::Vector2i, MAX_TILES_PER_CREATURE> adjacent_vulnerable_tiles;
 
-  bool canRotate(uint32_t num_90_rotations) const;
+  bool shouldDie(const Map& map) const;
+  bool hasDuplicateTiles() const;
   Creature reproduce();
   void updateTiles(Map& map);
   void updateMovement(Map& map);
-  void prepassKills(Map& map);
+  void updateHealth(const Map& map);
+  void updateKillBonus(const Map& map);
   void update(Map& map);
 };

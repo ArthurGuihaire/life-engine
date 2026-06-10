@@ -50,21 +50,61 @@ Creature::Creature(const Tile tiles[], const uint32_t num_tiles,
   for (uint32_t i = 0; i < this->num_tiles; i++) {
     const sf::Vector2i& tile_pos = this->tiles[i].rel_pos;
     for (const sf::Vector2i& offset : adjacent_offsets) {
-      const sf::Vector2i& adj_pos = tile_pos + offset;
+      const sf::Vector2i adj_pos = tile_pos + offset;
       for (uint32_t j = 0; j < this->num_tiles; j++) {
         if (this->tiles[j].rel_pos == adj_pos) {
           goto after_both_loops;
         }
       }
+      bool exists = false;
       for (uint32_t j = 0; j < this->num_adjacent_tiles; j++) {
         if (this->adjacent_tiles[j] == adj_pos) {
-          goto after_both_loops;
+          exists = true;
+          break;
         }
       }
-      this->adjacent_tiles[this->num_adjacent_tiles] = adj_pos;
-      this->num_adjacent_tiles++;
-      after_both_loops:;
+      if (!exists) {
+        this->adjacent_tiles.push_back(adj_pos);
+        this->num_adjacent_tiles++;
+      }
+      if (this->tiles[i].type == TileType::KILL) {
+        exists = false;
+        for (uint32_t j = 0; j < this->adjacent_red_tiles.size(); j++) {
+          if (this->adjacent_red_tiles[j] == adj_pos) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          this->adjacent_red_tiles.push_back(adj_pos);
+        }
+      }
+      else if (this->tiles[i].type == TileType::MOUTH) {
+        exists = false;
+        for (uint32_t j = 0; j < this->adjacent_yellow_tiles.size(); j++) {
+          if (this->adjacent_yellow_tiles[j] == adj_pos) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          this->adjacent_yellow_tiles.push_back(adj_pos);
+        }
+      }
+      if (this->tiles[i].type != TileType::ARMOR) {
+        exists = false;
+        for (uint32_t j = 0; j < this->adjacent_vulnerable_tiles.size(); j++) {
+          if (this->adjacent_vulnerable_tiles[j] == adj_pos) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          this->adjacent_vulnerable_tiles.push_back(adj_pos);
+        }
+      }
     }
+    after_both_loops:;
   }
 }
 
@@ -107,18 +147,15 @@ Creature Creature::reproduce() {
 }
 
 void Creature::updateTiles(Map& map) {
+  // update green tiles
   for (uint32_t idx = 0; idx < this->num_tiles; ++idx) {
     const Tile &tile = this->tiles[idx];
     const sf::Vector2i base_pos = this->position + tile.rel_pos;
 
-    // I know I know, im checking can_move for every tile, too lazy to split
-    // into 2 for loops
-
-
     if ((!this->can_move) && tile.type == TileType::GREEN) {
       for (const sf::Vector2i& offset : adjacent_offsets) {
         const sf::Vector2i adj_pos = base_pos + offset;
-        if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
+        if (!isOnMap(adj_pos)) {
           continue;
         }
         TileType& adjacent_tile = map.tiles[adj_pos.y][adj_pos.x];
@@ -128,23 +165,20 @@ void Creature::updateTiles(Map& map) {
         }
       }
     }
-    if (tile.type == TileType::MOUTH) {
-      for (const sf::Vector2i& offset : adjacent_offsets) {
-        const sf::Vector2i adj_pos = base_pos + offset;
-        if (adj_pos.x < 0 || adj_pos.x >= MAP_WIDTH || adj_pos.y < 0 || adj_pos.y >= MAP_HEIGHT) {
-          continue;
-        }
-        TileType& adjacent_tile = map.tiles[adj_pos.y][adj_pos.x];
-        if (adjacent_tile == TileType::FOOD) {
-          if (CASCADE_EAT) {
-            this->food += map.cascadeEat(adj_pos);
-          }
-          else {
-            this->food++;
-            std::lock_guard<std::mutex> lock(map.tiles_mutex);
-            adjacent_tile = TileType::NONE;
-          }
-        }
+  }
+
+  //update mouth tiles
+  for (const sf::Vector2i& adj_pos : this->adjacent_yellow_tiles) {
+    const sf::Vector2i abs_pos = adj_pos + this->position;
+    if (!isOnMap(abs_pos)) continue;
+    if (map.tiles[abs_pos.y][abs_pos.x] == TileType::FOOD) {
+      if (CASCADE_EAT) {
+        this->food += map.cascadeEat(abs_pos);
+      }
+      else {
+        this->food++;
+        std::lock_guard<std::mutex> lock(map.tiles_mutex);
+        map.tiles[abs_pos.y][abs_pos.x] = TileType::NONE;
       }
     }
   }
@@ -191,6 +225,15 @@ void Creature::updateMovement(Map& map) {
           for (uint32_t i = 0; i < this->num_adjacent_tiles; i++) {
             this->adjacent_tiles[i] = rotate_vector(this->adjacent_tiles[i], num_90_rotations);
           }
+          for (uint32_t i = 0; i < this->adjacent_red_tiles.size(); i++) {
+            this->adjacent_red_tiles[i] = rotate_vector(this->adjacent_red_tiles[i], num_90_rotations);
+          }
+          for (uint32_t i = 0; i < this->adjacent_yellow_tiles.size(); i++) {
+            this->adjacent_yellow_tiles[i] = rotate_vector(this->adjacent_yellow_tiles[i], num_90_rotations);
+          }
+          for (uint32_t i = 0; i < this->adjacent_vulnerable_tiles.size(); i++) {
+            this->adjacent_vulnerable_tiles[i] = rotate_vector(this->adjacent_vulnerable_tiles[i], num_90_rotations);
+          }
         }
         this->movement = new_dir;
         this->updateMovement(map);
@@ -205,28 +248,50 @@ void Creature::updateMovement(Map& map) {
   }
 }
 
-void Creature::prepassKills(Map& map) {
-  for (uint32_t idx = 0; idx < this->num_tiles; ++idx) {
-    const Tile &tile = this->tiles[idx];
-    if (tile.type == TileType::KILL) {
-      for (sf::Vector2i adj : adjacent_offsets) {
-        const sf::Vector2i abs_vec = this->position + tile.rel_pos + adj;
-        if (!isOnMap(abs_vec)) continue;
+void Creature::updateHealth(const Map& map) {
+  for (const sf::Vector2i& adj_pos : this->adjacent_vulnerable_tiles) {
+    const sf::Vector2i abs_pos = this->position + adj_pos;
+    if (!isOnMap(abs_pos)) continue;
+    if (map.tiles[abs_pos.y][abs_pos.x] == TileType::KILL) {
+      this->health -= 1;
+    }
+  }
+}
 
-        const TileType tile_type = map.tiles[abs_vec.y][abs_vec.x];
-        if (static_cast<uint32_t>(tile_type) >= NUM_NONLIVING_TYPES && tile_type != TileType::ARMOR) {
-          this->food += KILL_FOOD_BONUS;
-          std::cout << "creature got food bonus x" << this->num_food_bonuses << std::endl;
-          this->num_food_bonuses++;
-          return;
-        }
+void Creature::updateKillBonus(const Map& map) {
+  for (const sf::Vector2i& adj_pos : this->adjacent_red_tiles) {
+    const sf::Vector2i abs_pos = adj_pos + this->position;
+    if (!isOnMap(abs_pos)) continue;
+    const TileType& type = map.tiles[abs_pos.y][abs_pos.x];
+    if (type != TileType::NONE && type != TileType::FOOD && type != TileType::ARMOR) {
+      this->food += KILL_FOOD_BONUS;
+    }
+  }
+}
+
+bool Creature::shouldDie(const Map& map) const {
+  const uint32_t MAX_AGE = MAX_AGE_FACTOR * this->num_tiles;
+  return this->health <= 0 || this->age >= MAX_AGE;
+}
+
+bool Creature::hasDuplicateTiles() const {
+  for (uint32_t i = 0; i < this->num_tiles; i++) {
+    const sf::Vector2i& tile_pos = this->tiles[i].rel_pos;
+    for (uint32_t j = 0; j < i; j++) {
+      if (tile_pos == this->tiles[j].rel_pos) {
+        return true;
       }
     }
   }
+  return false;
 }
 
 void Creature::update(Map& map) {
   this->updateTiles(map);
   this->updateMovement(map);
-  this->prepassKills(map);
+  this->age++;
+  if (this->hasDuplicateTiles()) {
+    std::cout << "Duplicate tiles detected" << std::endl;
+
+  }
 }

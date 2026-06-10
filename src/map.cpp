@@ -45,6 +45,17 @@ void Map::kill(const uint32_t idx) {
 void Map::update() {
   new_creatures.clear();
   uint32_t creatures_alive = this->creatures.size();
+  //first update kill stuff
+  for (uint32_t idx = 0; idx < creatures_alive; ++idx) {
+    this->creatures[idx].updateKillBonus(*this);
+    this->creatures[idx].updateHealth(*this);
+    if (this->creatures[idx].shouldDie(*this)) {
+      this->kill(idx);
+      creatures_alive--;
+      idx--;
+      continue;
+    }
+  }
   for (uint32_t idx = 0; idx < creatures_alive; ++idx) {
     this->creatures[idx].update(*this);
 
@@ -75,14 +86,6 @@ void Map::update() {
       writeToMap(new_creature);
     }
 
-    if (this->creatures[idx].age > MAX_AGE_FACTOR * this->creatures[idx].num_tiles) {
-      this->kill(idx);
-      creatures_alive--;
-      idx--;
-      continue;
-    }
-
-    this->creatures[idx].age++;
     for (uint32_t i = 0; i < this->creatures[idx].num_adjacent_tiles; i++) {
       if (this->tiles[this->creatures[idx].adjacent_tiles[i].y + this->creatures[idx].position.y][this->creatures[idx].adjacent_tiles[i].x +  this->creatures[idx].position.x] == TileType::KILL) {
         this->creatures[idx].health -= 1;

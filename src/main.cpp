@@ -6,7 +6,6 @@
 #include <renderer.hpp>
 #include <thread>
 #include <utils.hpp>
-#include <iostream>
 
 struct ProfilePoint {
   uint32_t num_creatures;
@@ -14,7 +13,7 @@ struct ProfilePoint {
 };
 
 struct Instance {
-  bool limit_fps = false;
+  bool limit_fps = true;
   uint32_t fps = 5;
   std::chrono::time_point<std::chrono::steady_clock> next_frame_time = std::chrono::steady_clock::now();
   bool running = true;
@@ -26,19 +25,55 @@ struct Instance {
 void updateThread(Instance& instance) {
   while (instance.running) {
     instance.map.update();
-    std::lock_guard<std::mutex> lock(instance.instance_mutex);
+    bool limit_fps;
+    std::chrono::time_point<std::chrono::steady_clock> next_frame_time;
+    {
+      std::lock_guard<std::mutex> lock(instance.instance_mutex);
+      limit_fps = instance.limit_fps;
+      next_frame_time = instance.next_frame_time;
+    }
+    limit_fps = instance.limit_fps;
+    next_frame_time = instance.next_frame_time;
     if (instance.limit_fps) {
       auto now = std::chrono::steady_clock::now();
       if (now < instance.next_frame_time) {
         std::this_thread::sleep_until(instance.next_frame_time);
+        instance.next_frame_time += std::chrono::milliseconds(1000 / instance.fps);
       }
-      instance.next_frame_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000 / instance.fps);
+      else {
+        instance.next_frame_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000 / instance.fps);
+      }
     }
   }
 }
 
 void renderThread(Instance& instance) {
   while (instance.running) {
+    //for now, just run updates here
+    /*
+    instance.map.update();
+    bool limit_fps;
+    std::chrono::time_point<std::chrono::steady_clock> next_frame_time;
+    {
+      std::lock_guard<std::mutex> lock(instance.instance_mutex);
+      limit_fps = instance.limit_fps;
+      next_frame_time = instance.next_frame_time;
+    }
+    limit_fps = instance.limit_fps;
+    next_frame_time = instance.next_frame_time;
+    if (instance.limit_fps) {
+      auto now = std::chrono::steady_clock::now();
+      if (now < instance.next_frame_time) {
+        std::this_thread::sleep_until(instance.next_frame_time);
+        instance.next_frame_time += std::chrono::milliseconds(1000 / instance.fps);
+      }
+      else {
+        instance.next_frame_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000 / instance.fps);
+      }
+    }
+    */
+    //end of update loop
+
     while (const std::optional event = instance.renderer.window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         instance.renderer.window.close();
@@ -101,61 +136,4 @@ int main() {
   renderThread(instance);
 
   update_thread.join();
-
-  /*
-  while (renderer.window.isOpen()) {
-    if (RUN_PROFILING) {
-      auto start_time = std::chrono::steady_clock::now();
-      map.update();
-      auto end_time = std::chrono::steady_clock::now();
-      profiling_data.push_back({map.numCreatures(), std::chrono::duration<double>(end_time - start_time).count()});
-    }
-    else {
-      map.update();
-    }
-    renderer.render();
-    while (const std::optional event = renderer.window.pollEvent()) {
-      if (event->is<sf::Event::Closed>()) {
-        renderer.window.close();
-      }
-      else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>())
-      {
-        if (keyPressed->scancode == sf::Keyboard::Scancode::Escape)
-          renderer.window.close();
-        else if (keyPressed->scancode == sf::Keyboard::Scancode::Num1) {
-          limit_fps = true;
-          fps = 2;
-        }
-        else if (keyPressed->scancode == sf::Keyboard::Scancode::Num2) {
-          limit_fps = true;
-          fps = 5;
-        }
-        else if (keyPressed->scancode == sf::Keyboard::Scancode::Num3) {
-          limit_fps = true;
-          fps = 10;
-        }
-        else if (keyPressed->scancode == sf::Keyboard::Scancode::Num4) {
-          limit_fps = true;
-          fps = 60;
-        }
-        else if (keyPressed->scancode == sf::Keyboard::Scancode::Num5) {
-          limit_fps = false;
-        }
-      }
-    }
-    std::chrono::time_point<std::chrono::steady_clock> current_frame_time = std::chrono::steady_clock::now();
-    if (limit_fps && current_frame_time < next_frame_time) {
-      std::this_thread::sleep_until(next_frame_time);
-    }
-    next_frame_time = std::chrono::time_point_cast<std::chrono::steady_clock::duration>(
-        current_frame_time + std::chrono::duration<double>(1.0 / fps)
-    );
-  }
-
-  if (RUN_PROFILING) {
-    for (const auto& point : profiling_data) {
-      std::cout << "(" << point.num_creatures << ", " << point.update_time << ")\n";
-    }
-  }
-  */
 }
